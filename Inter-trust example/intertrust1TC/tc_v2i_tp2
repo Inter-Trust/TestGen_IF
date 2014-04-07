@@ -1,0 +1,6 @@
+?ActivateService{DynamicPlannigRoute} !requireInfoLogIn{}
+?GiveInfoLogIn{login1,pass1} !Forward_Inf_log_in{login1,pass1}
+?Success_log_in{} !askForDestination{}
+?provideDestination{currentPosition} !Ask_for_route{currentPosition,currentPosition}
+?optimalRoute{optimalRoute1} !displayRoute{optimalRoute1}
+?arrivedToDestination{} !Stop_service{}

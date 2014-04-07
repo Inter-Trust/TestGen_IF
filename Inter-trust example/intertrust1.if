@@ -1,0 +1,273 @@
+/**************************************************************
+ * System V2I -                                               * 
+ *                                                            *		                              *
+ *                          Department LOR, IT-Sudparis       *
+ **************************************************************/
+
+system V2I;
+
+/*constant definition*/
+const SD = 100;  /* the safety distance between two ETCS trains */  
+/*const NbService = 10; /* the number of services available */
+
+/*type definition*/
+type states = enum off_line, wait, waitForLogIn, logged_in,
+				wait_for_route, navigation, IDLE, info, monitoringNavigation, error_navigation endenum;
+type position = enum currentPosition/*, destination, newDestination */endenum;
+type service = enum DynamicPlannigRoute, service1, service2 endenum;
+type route = enum optimalRoute1/*, optimalRoute2, correctedRoute */endenum;
+type login = enum login1/*, login2, login3 */endenum;
+type password = enum pass1/*, pass2, pass3 */endenum;
+/*type position = struct {integer; integer;}*/
+/*type route = data;*/
+
+
+ 
+ 
+ /* Signals definitions */
+
+ /* channel 1 */
+ signal Forward_Inf_log_in(login, password) ;
+ signal Ask_for_route(position, position) ;
+ signal Ask_for_new_route(position,position);
+ signal Ask_for_corrected_route();
+ signal Stop_service();
+ 
+ /* channel 2 */
+ signal Error_log_in() ;
+ signal Success_log_in() ;
+ signal Error_route() ;
+ signal optimalRoute(route) ;
+ signal	correctedRoute(route) ;
+ signal Stop_OK() ;
+ signal ErrorService();
+ 
+ 
+/* channel 4 */
+signal ActivateService(service);
+signal GiveInfoLogIn(login,password); 
+/*signal Ask_for_route(position,position);*/
+signal provideDestination(position) ;
+signal provideNewDestination(position) ;
+signal arrivedToDestination ();
+
+/* channel 3 */
+signal requireInfoLogIn();
+signal requireCorrection() ;
+signal askForDestination() ;
+signal displayRoute(route) ;
+signal displayCorrectedRoute(route) ; 
+
+
+ /* Signal route definitions */
+
+ /* channel 1 */
+signalroute vehicle_to_ControlCentre(1) 
+	from vehicle to env 
+  	with Forward_Inf_log_in, Ask_for_route, Ask_for_new_route, 
+		Ask_for_corrected_route, Stop_service;
+		
+/* channel 2 */
+signalroute ControlCentre_to_vehicle(1) 
+	from env to vehicle
+	with Error_log_in, Success_log_in, Error_route, optimalRoute, 
+	correctedRoute, Stop_OK ;
+	
+/* channel 3 */
+signalroute vehicle_to_user(1)
+	from vehicle to env
+	with  requireInfoLogIn, requireCorrection, askForDestination, displayRoute, displayCorrectedRoute , ErrorService ;
+	
+/* channel 4 */
+signalroute user_to_vehicle(1)
+	from env to vehicle
+	with ActivateService, GiveInfoLogIn, Ask_for_route, provideDestination, provideNewDestination, arrivedToDestination ;
+
+   
+
+/**************************/
+/* Process vehicle        */  
+/**************************/ 
+ process vehicle(1);
+
+var servicex service  private;
+/*var servicex1 service := service1 private;
+var servicex2 service := service2 private;*/
+var loginx login private;
+var passx password private;
+var optimalRoutex route private;
+var currentPositionx position private;
+var destinationx position  private;
+var newDestinationx position  private;
+var correctedRoutex route private ;
+   	
+ /* States specification */
+ 
+ /*************************************
+ ****state off-line *****
+ **************************************/
+ /*   is the initial state of the vehicle. We consider that any vehicle at this state is not connected to the control centre and is not logged on the service   */
+state off_line #start   ; 
+	deadline lazy; 
+	input ActivateService(servicex);
+	/* if the vehicle receives the ActivateService message from the user, it moves to the wait state  */
+	/*output requireInfoLogIn() ; */
+	 	/* the answer is a message from the vehicle to the user which asks the login information  */
+	 nextstate off_line_inter;
+	endstate;
+
+/************************************************
+	state off_line_inter
+****************************************************/
+state off_line_inter #unstable ;
+	provided (servicex=(service1));
+	output ErrorService();
+	nextstate off_line;
+
+	provided (servicex=(service2));
+	output ErrorService();
+	nextstate off_line;	
+
+	provided (servicex=DynamicPlannigRoute);
+	output requireInfoLogIn();
+	nextstate wait;
+	endstate;
+
+
+/*
+	deadline lazy;
+	input ActivateService(servicex1);
+	output requireInfoLogIn() ; 
+	 nextstate -;
+
+	deadline lazy;
+	input ActivateService(servicex2);
+	output requireInfoLogIn() ; 
+	 nextstate -;*/
+	 
+		 
+	
+	 
+/******************************************
+         state wait 
+*******************************************/
+state wait ; 
+	/*deadline lazy; */
+	input GiveInfoLogIn(loginx,passx);
+	output Forward_Inf_log_in(loginx,passx) ;
+	nextstate waitForLogIn ;
+	endstate;
+	
+/*******************************************
+            state waitForLogIn
+**********************************************/
+state waitForLogIn ;
+	/*deadline lazy;*/ 
+	input Error_log_in();
+	output requireCorrection();
+	nextstate wait;
+	
+	/*deadline lazy; */
+	input Success_log_in();
+	output askForDestination();
+	nextstate logged_in;
+	endstate;
+
+/****************************************************
+              state waitForRoute
+****************************************************/
+
+state waitForRoute ;
+	input optimalRoute(optimalRoutex);
+	output displayRoute(optimalRoutex);
+	nextstate navigation;
+	endstate;
+
+/**************************************************
+		stqte loggedIn
+***************************************************/
+state logged_in;
+	deadline lazy; 
+	input provideDestination(destinationx);
+	output Ask_for_route(currentPositionx,destinationx);
+	nextstate waitForRoute;
+	endstate;
+	
+/******************************************************
+           state navigation
+****************************************************/
+state navigation ;
+
+	deadline lazy;
+	input provideNewDestination(newDestinationx);
+	output Ask_for_new_route(currentPositionx,newDestinationx);
+	nextstate waitForRoute;
+	
+	deadline lazy; 
+	input Error_route() ;
+	output Ask_for_corrected_route();
+	nextstate errorNavigation;
+
+	deadline lazy; 
+	input arrivedToDestination();
+	output Stop_service();
+	nextstate off_line;
+	endstate;
+	
+/****************************************************************************
+             state error navigation
+*****************************************************************************/
+state errorNavigation;
+	deadline lazy; 
+	input correctedRoute(correctedRoutex);
+	output displayCorrectedRoute(correctedRoutex);
+	nextstate navigation;
+	endstate;
+	endprocess ; 
+
+/*
+process user(1);
+endprocess;
+*/
+/*
+process ControlCentre(1);
+var loginx login private;
+var passx password private;
+var optimalRoutex route := optimalRoute1 private;
+var currentPositionx position := currentPosition private;
+var destinationx position := destination private;
+var newDestinationx position := newDestination private;
+var correctedRoutex route := correctedRoute ;
+ 
+state IDLE #start ;
+	deadline lazy;
+	input Forward_Inf_log_in(loginx,passx) ;
+	nextstate IDLE_inter ;
+	endstate ;
+
+state IDLE_inter #unstable ;
+	deadline lazy;
+	provided (loginx = (login1)) and (passx = (pass1));
+	output Success_log_in() via {ControlCentre_to_vehicle}0;
+	nextstate info ;
+
+	provided (loginx = (login1)) and (passx <> (pass1));
+	output Error_log_in() via {ControlCentre_to_vehicle}0;
+	nextstate - ;
+	endstate;
+
+	
+
+state info;
+	deadline lazy;
+	input Ask_for_route(currentPositionx,destinationx);
+	output optimalRoute(optimalRoutex) ;
+	nextstate - ;
+	endstate; 
+
+endprocess; 
+*/
+	endsystem; 
+
+
+

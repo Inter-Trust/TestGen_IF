@@ -1,0 +1,2 @@
+?ActivateService{DynamicPlannigRoute} !requireInfoLogIn{}
+?GiveInfoLogIn{login1,pass1} !Forward_Inf_log_in{login1,pass1}
